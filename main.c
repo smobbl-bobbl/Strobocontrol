@@ -79,8 +79,6 @@ void timerA_init(void);
 void timerA_start(int timing[2], int mode);
 
 unsigned int i = 0;
-unsigned int intDelay = 2;
-unsigned char delay = 0x01;
 
 // +---------------------------------------------------------------------------+
 
@@ -211,7 +209,7 @@ interrupt (TIMERB0_VECTOR) Timer_B(void)
 
 void init_PWM_TimerA(void)
 {
- TACCR0 = 32768 - 1;                         // PWM Period 64 --> 512 Hz
+ TACCR0 = 64 - 1;                         // PWM Period 64 --> 512 Hz
 
 //  TACCTL0 = OUTMOD_7;                     // CCR1 reset/set
  TACCTL1 = OUTMOD_7;
@@ -224,7 +222,7 @@ void init_PWM_TimerA(void)
 
                      // P1.2 and TA1/2 otions
 // TACTL |= MC0;                         // Start Timer_A in up mode
- TACTL = TASSEL_1 + MC_1 + ID_3;
+ TACTL = TASSEL_1 + MC_1;
 
 //lasse interrupt von TACCTL0 zu
  
@@ -249,28 +247,23 @@ void set_PWM_duty_cycle(unsigned int duty)
 #pragma vector=TIMERA0_VECTOR
 __interrupt void Timer_A (void)
 {
-  if (intDelay == 0) {
-    delay = 0x00;
-    TACCR0 = 0x3F;
-  }
-  if (delay == 0x00) {
-    if (TACCR1 < 0x2F) {
-      i++;
-      if (i >= 0x9FF >> 2) {
-        set_PWM_duty_cycle(TACCR1 + 1);
-        P1IFG = 0x00;
-        i = 0x00;
-	  }
+  if (TACCR1 <= 40) {
+    i++;
+    if (i > 500) {
+      set_PWM_duty_cycle(TACCR1 + 1);
+      P1IFG = 0x00;
+      i = 0x00;
+//      CCR0 += 50;                            // Add Offset to CCR0
+
     }
-	else {
-	  TACCTL0 &= ~CCIE;
-	}
   }
-  else {
-    intDelay = intDelay - 1;
+    if (TACCR1 == 41) {
+      set_PWM_duty_cycle(0);
+      P1IFG = 0x00;
+      i = 0x00;
+          
   }
 }
-
 
 // +---------------------------------------------------------------------------+
 
@@ -280,4 +273,30 @@ __interrupt void Timer_A (void)
 
 
  // PWM
+
+// Untenstehender Code ist nur mit msp320-gcc getestet.
+// Folgende Routine initialisiert den Timer als Up-Counter mit der Clock-Quelle SMCLK und einem Teiler von 8. Zudem wird der Interrupt aktiviert. 
+
+void timerA_init(void)
+{
+	TACTL =  TASSEL_2 | TACLR | ID_3 | TAIE;
+	TACTL |= MC_1;
+}
+
+
+// Um den Timer zu starten:
+
+void timerA_start(int timing[2], int mode)
+{
+	TACCTL0 = mode;
+	TACCTL0 |= CCIE ;                // enable interrupt
+	TACCTL1 = mode;
+	TACCR0 = timing[0];
+	TACCR1 = timing[1];
+	TAR = 0;
+}
+
+
+// +---------------------------------------------------------------------------+
+
 
